@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Lex Interceptor
+Parameters:
+  BotAlas:
+    Default: $LATEST
+    Type: String
+  BotName:
+    Default: ChatBot_ExcelLexBot
+    Type: String
+  FacebookPageToken:
+    Description: Facebook Page Token
+    NoEcho: true
+    Type: String
+  FacebookVerifyToken:
+    Default: testing
+    Description: Facebook Verify Token
+    Type: String
+  GoogleApiKey:
+    NoEcho: true
+    Type: String
+  SourceBucket:
+    Default: howwhofeelinvideopackage
+    Description: Bucket Lambda deployment packages
+    Type: String
+Resources:
+  DecodeQrcode:
+    Properties:
+      CodeUri:
+        Bucket:
+          Ref: SourceBucket
+        Key: QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar
+      Description: Decode Qrcode by sending in Url string.
+      Handler: com.cloudlab.healthAi.qrcode.QrcodeHandler::handleRequest
+      MemorySize: 1024
+      Policies:
+      - AWSXrayWriteOnlyAccess
+      - AmazonRekognitionFullAccess
+      - AWSLambdaExecute
+      - AWSLambdaBasicExecutionRole
+      Runtime: java8
+      Timeout: 60
+      Tracing: Active
+    Type: AWS::Serverless::Function
+  FacebookLexProxy:
+    Properties:
+      CodeUri:
+        Bucket:
+          Ref: SourceBucket
+        Key: LexInterceptor_latest.zip
+      Description: Interceptor Facebook Request
+      Environment:
+        Variables:
+          BOT_ALIAS:
+            Ref: BotAlas
+          BOT_NAME:
+            Ref: BotName
+          GOOGLE_API_KEY:
+            Ref: GoogleApiKey
+          IMAGE_BUCKET:
+            Ref: ImageBucket
+          PAGE_TOKEN:
+            Ref: FacebookPageToken
+          QRCODE_FUNCTION:
+            Ref: DecodeQrcode
+          VERIFY_TOKEN:
+            Ref: FacebookVerifyToken
+      Events:
+        GetMessage:
+          Properties:
+            Method: get
+            Path: /
+          Type: Api
+        PostMessage:
+          Properties:
+            Method: post
+            Path: /
+          Type: Api
+      Handler: facebookInterceptor.handler
+      MemorySize: 512
+      Policies:
+      - AWSLambdaExecute
+      - AWSXrayWriteOnlyAccess
+      - AmazonRekognitionFullAccess
+      - Statement:
+        - Action:
+          - lambda:InvokeFunction
+          - lex:PostText
+          Effect: Allow
+          Resource: '*'
+        Version: '2012-10-17'
+      Runtime: nodejs6.10
+      Timeout: 60
+      Tracing: Active
+    Type: AWS::Serverless::Function
+  ImageBucket:
+    Properties:
+      AccessControl: Private
+    Type: AWS::S3::Bucket
+Transform: AWS::Serverless-2016-10-31

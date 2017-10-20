@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: Lex Interceptor
+Parameters:
+  SourceBucket:
+    Type: String
+    Default: howwhofeelinvideopackage
+    Description: Bucket Lambda deployment packages
+  FacebookVerifyToken:
+    Type: String
+    Default: testing
+    Description: Facebook Verify Token
+  FacebookPageToken:
+    Type: String
+    Description: Facebook Page Token
+    NoEcho: true
+  BotAlas:
+    Type: String
+    Default: $LATEST
+  BotName:
+    Type: String
+    Default: ChatBot_ExcelLexBot
+  GoogleApiKey:
+    Type: String
+    NoEcho: true
+Resources:
+  DecodeQrcode:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Decode Qrcode by sending in Url string.
+      Handler: com.cloudlab.healthAi.qrcode.QrcodeHandler::handleRequest
+      Runtime: java8
+      MemorySize: 1024
+      Timeout: 60
+      Tracing: Active
+      Policies:
+        - AWSXrayWriteOnlyAccess
+        - AmazonRekognitionFullAccess
+        - AWSLambdaExecute
+        - AWSLambdaBasicExecutionRole
+      CodeUri:
+        Bucket: !Ref SourceBucket
+        Key: QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar
+
+  FacebookLexProxy:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: facebookInterceptor.handler
+      Runtime: nodejs6.10
+      CodeUri:
+        Bucket: !Ref SourceBucket
+        Key: LexInterceptor_latest.zip
+      Description: Interceptor Facebook Request
+      MemorySize: 512
+      Timeout: 60
+      Tracing: Active
+      Policies:
+        - AWSLambdaExecute # Managed Policy
+        - AWSXrayWriteOnlyAccess
+        - AmazonRekognitionFullAccess
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+           - Effect: Allow
+             Action:
+             - lambda:InvokeFunction
+             - lex:PostText
+             Resource: "*"
+      Environment:
+        Variables:
+          QRCODE_FUNCTION: !Ref DecodeQrcode
+          PAGE_TOKEN: !Ref FacebookPageToken
+          VERIFY_TOKEN: !Ref FacebookVerifyToken
+          BOT_ALIAS: !Ref BotAlas
+          BOT_NAME: !Ref BotName
+          GOOGLE_API_KEY: !Ref GoogleApiKey
+          IMAGE_BUCKET: !Ref ImageBucket
+      Events:
+        PostMessage:
+          Type: Api
+          Properties:
+            Path: /
+            Method: post
+        GetMessage:
+          Type: Api
+          Properties:
+            Path: /
+            Method: get
+
+  ImageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
