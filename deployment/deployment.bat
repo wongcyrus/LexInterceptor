@@ -1,5 +1,5 @@
-::aws s3 cp QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar s3://howwhofeelinvideopackage/QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar
-::aws s3 cp ../dist/LexInterceptor_latest.zip s3://howwhofeelinvideopackage/LexInterceptor_latest.zip
+aws s3 cp QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar s3://howwhofeelinvideopackage/QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar
+aws s3 cp ../dist/LexInterceptor_latest.zip s3://howwhofeelinvideopackage/LexInterceptor_latest.zip
 
 aws cloudformation package ^
     --region us-east-1^
