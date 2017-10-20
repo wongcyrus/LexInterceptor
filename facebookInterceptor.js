@@ -41,8 +41,8 @@ exports.handler = (event, context, callback) => {
 
         Promise.all(messagingEvents.map(processMessage))
             .then(values => {
-                console.log(values);
-                console.log("Call back without Error " + values);
+                console.log("Call back without Error");
+                console.log(JSON.stringify(values));
                 callback(null, createResponse(200, JSON.stringify(values)));
             }).catch(reason => {
             console.log(reason);
@@ -55,15 +55,12 @@ exports.handler = (event, context, callback) => {
 const processMessage = messagingEvent => new Promise((resolve, reject) => {
     console.log(JSON.stringify(messagingEvent));
     if (messagingEvent.message.attachments) {   //Facebook Attachments
-        let imageLink = messagingEvent.message.attachments[0].payload.url;
-        console.log("Receive a link: " + imageLink);
-        downloadImage(imageLink)
-            .then(uploadToS3)
-            .then(qrCodeDecode)
-            .then(detectLabels)
-            .then(context => sendTextMessage(messagingEvent.sender.id, JSON.stringify(context)))
-            .then(data => resolve(data))
-            .catch(error => reject(error));
+        let imageLinks = messagingEvent.message.attachments.map(c => c.payload.url);
+        console.log("Receive links: " + imageLinks);
+        Promise.all(imageLinks.map(processImage))
+            .then(data => sendTextMessage(messagingEvent.sender.id, JSON.stringify(data)))
+            .then(resolve)
+            .catch(reject);
     } else {
         if (messagingEvent.message && messagingEvent.message.text) {
             let text = messagingEvent.message.text;
@@ -73,8 +70,8 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
                 .then(callLex)
                 .then(translateReply)
                 .then(messagingEvent => sendTextMessage(messagingEvent.sender.id, messagingEvent.message.reply))
-                .then(data => resolve(data))
-                .catch(error => reject(error));
+                .then(resolve)
+                .catch(reject);
         }
     }
 });
@@ -86,7 +83,17 @@ const createResponse = (statusCode, body) => {
     }
 };
 
-const translateRequest = (messagingEvent) => new Promise((resolve, reject) => {
+const processImage = imageLink => {
+    console.log("processImage:" + imageLink);
+    return downloadImage(imageLink)
+        .then(uploadToS3)
+        .then(qrCodeDecode)
+        .then(detectLabels);
+};
+
+
+const translateRequest = messagingEvent => new Promise((resolve, reject) => {
+    console.log("translateRequest");
     let googleTranslate = require('google-translate')(GOOGLE_API_KEY);
     let text = messagingEvent.message.text;
     googleTranslate.translate(text, "en", (error, translation) => {
@@ -102,6 +109,7 @@ const translateRequest = (messagingEvent) => new Promise((resolve, reject) => {
 });
 
 const translateReply = (messagingEvent) => new Promise((resolve, reject) => {
+    console.log("translateReply");
     let googleTranslate = require('google-translate')(GOOGLE_API_KEY);
     let text = messagingEvent.message.reply;
     console.log(messagingEvent.message.language);
@@ -120,6 +128,7 @@ const translateReply = (messagingEvent) => new Promise((resolve, reject) => {
 
 
 const detectLanguage = messagingEvent => new Promise((resolve, reject) => {
+    console.log("detectLanguage");
     let googleTranslate = require('google-translate')(GOOGLE_API_KEY);
     let text = messagingEvent.message.text;
     googleTranslate.detectLanguage(text, (error, detection) => {
@@ -135,6 +144,7 @@ const detectLanguage = messagingEvent => new Promise((resolve, reject) => {
 
 
 const callLex = messagingEvent => new Promise((resolve, reject) => {
+    console.log("callLex");
     let lexruntime = new AWS.LexRuntime({
         region: 'us-east-1' //change to your region
     });
@@ -159,7 +169,7 @@ const callLex = messagingEvent => new Promise((resolve, reject) => {
 });
 
 const qrCodeDecode = context => new Promise((resolve, reject) => {
-    console.log(context);
+    console.log("qrCodeDecode");
     lambda.invoke({
         FunctionName: QRCODE_FUNCTION,
         Payload: JSON.stringify(context.url) // pass params
@@ -168,15 +178,16 @@ const qrCodeDecode = context => new Promise((resolve, reject) => {
             console.log('error', error);
             reject(error);
         }
-        let qrcodeText = data;
+        let qrcodeText = data.Payload;
         console.log(data);
-        if (qrcodeText !== "\"\"")
+        if (qrcodeText !== '""')
             context.qrCode = qrcodeText;
         resolve(context);
     });
 });
 
 const downloadImage = url => new Promise((resolve, reject) => {
+    console.log("downloadImage");
     let options = {
         url,
         dest: '/tmp'
@@ -192,6 +203,7 @@ const downloadImage = url => new Promise((resolve, reject) => {
 });
 
 const uploadToS3 = context => new Promise((resolve, reject) => {
+    console.log("uploadToS3");
     let fileBuffer = fs.readFileSync(context.filename);
     let params = {Bucket: IMAGE_BUCKET, Key: context.filename, Body: fileBuffer};
     s3.upload(params, (err, data) => {
@@ -207,7 +219,8 @@ const uploadToS3 = context => new Promise((resolve, reject) => {
 });
 
 const detectLabels = context => new Promise((resolve, reject) => {
-    if (context.qrCode) {
+    console.log("detectLabels");
+    if (!context.qrCode) {
         let rekognition = new AWS.Rekognition({region: 'us-east-1'});
         let params = {
             Image: {
@@ -250,7 +263,7 @@ const sendTextMessage = (senderFbId, text) => new Promise((resolve, reject) => {
             str += chunk;
         });
         response.on('end', () => {
-            resolve(`Sent message ${senderFbId}: ${text}`);
+            resolve(`Sent message ${senderFbId}: \n${text}`);
         });
     };
     let req = https.request(options, callback);
