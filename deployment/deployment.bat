@@ -1,0 +1,15 @@
+::aws s3 cp QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar s3://howwhofeelinvideopackage/QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar
+::aws s3 cp ../dist/LexInterceptor_latest.zip s3://howwhofeelinvideopackage/LexInterceptor_latest.zip
+
+aws cloudformation package ^
+    --region us-east-1^
+    --template-file LexInterceptor.yaml ^
+    --s3-bucket howwhofeelinvideopackage ^
+    --output-template-file LexInterceptor-packaged-template.yaml
+
+aws cloudformation deploy ^
+    --region us-east-1^
+    --capabilities CAPABILITY_IAM ^
+    --template-file LexInterceptor-packaged-template.yaml --stack-name LexInterceptor ^
+    --parameter-overrides GoogleApiKey=%GoogleApiKey% FacebookPageToken=%FacebookPageToken%
+

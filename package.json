@@ -1,0 +1,26 @@
+{
+  "name": "LexInterceptor",
+  "version": "0.0.1",
+  "description": "AWS Lex Interceptor to add multiple language suppport and Image handling",
+  "dependencies": {
+    "aws-sdk": "^2.135.0",
+    "aws-xray-sdk": "^1.1.4",
+    "google-translate": "^2.0.5",
+    "image-downloader": "^3.3.0"
+  },
+  "devDependencies": {
+    "aws-sdk": "^2.135.0",
+    "grunt": "^1.0.1",
+    "grunt-aws-lambda": "^0.13.0",
+    "grunt-pack": "^0.1.5"
+  },
+  "author": "Cyrus Wong",
+  "license": "MIT",
+  "engines": {
+    "node": "6.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wongcyrus/LexInterceptor.git"
+  }
+}
