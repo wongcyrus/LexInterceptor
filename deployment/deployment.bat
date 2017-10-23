@@ -1,4 +1,5 @@
 aws s3 cp QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar s3://howwhofeelinvideopackage/QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar
+node C:\Users\developer\AppData\Roaming\npm\node_modules\grunt-cli\bin\grunt --gruntfile ..\Gruntfile.js lambda_package
 aws s3 cp ../dist/LexInterceptor_latest.zip s3://howwhofeelinvideopackage/LexInterceptor_latest.zip
 
 aws cloudformation package ^

@@ -15,6 +15,7 @@ const BOT_NAME = process.env.BOT_NAME;
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const IMAGE_BUCKET = process.env.IMAGE_BUCKET;
 const SESSION_TABLE_NAME = process.env.SESSION_TABLE_NAME;
+const ALLOWED_LANGUAGES = process.env.ALLOWED_LANGUAGES;
 
 exports.handler = (event, context, callback) => {
     console.log(JSON.stringify(event));
@@ -56,7 +57,7 @@ exports.handler = (event, context, callback) => {
 
 const processMessage = messagingEvent => new Promise((resolve, reject) => {
     console.log(JSON.stringify(messagingEvent));
-    let googleTranslator = new GoogleTranslator(GOOGLE_API_KEY);
+    let googleTranslator = new GoogleTranslator(GOOGLE_API_KEY, ALLOWED_LANGUAGES);
     let lexController = new LexController(BOT_NAME, BOT_ALIAS);
     if (messagingEvent.message.attachments) {   //Facebook Attachments
         let imageLinks = messagingEvent.message.attachments
