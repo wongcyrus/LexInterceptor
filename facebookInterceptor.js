@@ -1,11 +1,10 @@
 'use strict';
-const AWSXRay = require('aws-xray-sdk');
-const AWS = AWSXRay.captureAWS(require('aws-sdk'));
 const https = require('https');
-const download = require('image-downloader');
-const fs = require("fs");
-const lambda = new AWS.Lambda();
-const s3 = new AWS.S3();
+
+const GoogleTranslator = require('./lib/GoogleTranslator');
+const ImageProcessor = require('./lib/ImageProcessor');
+const StorageController = require("./lib/StorageController");
+const LexController = require("./lib/LexController");
 
 const PAGE_TOKEN = process.env.PAGE_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -63,12 +62,14 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
             .catch(reject);
     } else {
         if (messagingEvent.message && messagingEvent.message.text) {
+            let googleTranslator = new GoogleTranslator(GOOGLE_API_KEY);
+            let lexController = new LexController(BOT_NAME, BOT_ALIAS);
             let text = messagingEvent.message.text;
             console.log("Receive a message: " + text);
-            detectLanguage(messagingEvent)
-                .then(translateRequest)
-                .then(callLex)
-                .then(translateReply)
+            googleTranslator.detectLanguage(messagingEvent)
+                .then(googleTranslator.translateRequest)
+                .then(lexController.postText)
+                .then(googleTranslator.translateReply)
                 .then(messagingEvent => sendTextMessage(messagingEvent.sender.id, messagingEvent.message.reply))
                 .then(resolve)
                 .catch(reject);
@@ -76,173 +77,22 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
     }
 });
 
+const processImage = imageLink => {
+    console.log("processImage:" + imageLink);
+    let imageProcessor = new ImageProcessor(QRCODE_FUNCTION);
+    let storageController = new StorageController(IMAGE_BUCKET);
+    return storageController.downloadImage(imageLink)
+        .then(storageController.uploadToS3)
+        .then(imageProcessor.qrCodeDecode)
+        .then(imageProcessor.detectLabels);
+};
+
 const createResponse = (statusCode, body) => {
     return {
         statusCode: statusCode,
         body: body
     }
 };
-
-const processImage = imageLink => {
-    console.log("processImage:" + imageLink);
-    return downloadImage(imageLink)
-        .then(uploadToS3)
-        .then(qrCodeDecode)
-        .then(detectLabels);
-};
-
-
-const translateRequest = messagingEvent => new Promise((resolve, reject) => {
-    console.log("translateRequest");
-    let googleTranslate = require('google-translate')(GOOGLE_API_KEY);
-    let text = messagingEvent.message.text;
-    googleTranslate.translate(text, "en", (error, translation) => {
-        if (error) {
-            console.log('error', error);
-            reject(error);
-        }
-        console.log(`${text} translate to ${translation.translatedText}`);
-        messagingEvent.message.originalText = text;
-        messagingEvent.message.text = translation.translatedText;
-        resolve(messagingEvent);
-    });
-});
-
-const translateReply = (messagingEvent) => new Promise((resolve, reject) => {
-    console.log("translateReply");
-    let googleTranslate = require('google-translate')(GOOGLE_API_KEY);
-    let text = messagingEvent.message.reply;
-    console.log(messagingEvent.message.language);
-    console.log(text);
-    googleTranslate.translate(text, messagingEvent.message.language, (error, translation) => {
-        if (error) {
-            console.log('error', error);
-            reject(error);
-        }
-        console.log(`${text} translate to ${translation.translatedText}`);
-        messagingEvent.message.originaRepy = text;
-        messagingEvent.message.reply = translation.translatedText;
-        resolve(messagingEvent);
-    });
-});
-
-
-const detectLanguage = messagingEvent => new Promise((resolve, reject) => {
-    console.log("detectLanguage");
-    let googleTranslate = require('google-translate')(GOOGLE_API_KEY);
-    let text = messagingEvent.message.text;
-    googleTranslate.detectLanguage(text, (error, detection) => {
-        if (error) {
-            console.log('error', error);
-            reject(error);
-        }
-        console.log(`User language is ${detection.language}`);
-        messagingEvent.message.language = detection.language;
-        resolve(messagingEvent);
-    });
-});
-
-
-const callLex = messagingEvent => new Promise((resolve, reject) => {
-    console.log("callLex");
-    let lexruntime = new AWS.LexRuntime({
-        region: 'us-east-1' //change to your region
-    });
-    let params = {
-        botAlias: BOT_ALIAS,
-        botName: BOT_NAME,
-        inputText: messagingEvent.message.text,
-        userId: messagingEvent.sender.id,
-        sessionAttributes: {}
-    };
-    console.log(params);
-    lexruntime.postText(params, (err, data) => {
-        if (err) {
-            console.log(err, err.stack); // an error occurred
-            reject("Sorry, we ran into a problem at our end.");
-        } else {
-            console.log(data);           // got something back from Amazon Lex
-            messagingEvent.message.reply = data.message;
-            resolve(messagingEvent)
-        }
-    });
-});
-
-const qrCodeDecode = context => new Promise((resolve, reject) => {
-    console.log("qrCodeDecode");
-    lambda.invoke({
-        FunctionName: QRCODE_FUNCTION,
-        Payload: JSON.stringify(context.url) // pass params
-    }, (error, data) => {
-        if (error) {
-            console.log('error', error);
-            reject(error);
-        }
-        let qrcodeText = data.Payload;
-        console.log(data);
-        if (qrcodeText !== '""')
-            context.qrCode = qrcodeText;
-        resolve(context);
-    });
-});
-
-const downloadImage = url => new Promise((resolve, reject) => {
-    console.log("downloadImage");
-    let options = {
-        url,
-        dest: '/tmp'
-    };
-    download.image(options)
-        .then(({filename, image}) => {
-            console.log('File saved to', filename);
-            resolve({url, filename});
-        }).catch((err) => {
-        console.log(err);
-        reject("Sorry, we ran into a problem at our end.");
-    });
-});
-
-const uploadToS3 = context => new Promise((resolve, reject) => {
-    console.log("uploadToS3");
-    let fileBuffer = fs.readFileSync(context.filename);
-    let params = {Bucket: IMAGE_BUCKET, Key: context.filename, Body: fileBuffer};
-    s3.upload(params, (err, data) => {
-        console.log(err, data);
-        if (err) {
-            console.log(err, err.stack); // an error occurred
-            reject("Sorry, we ran into a problem at our end.");
-        } else {
-            console.log(data);
-            resolve(context)
-        }
-    });
-});
-
-const detectLabels = context => new Promise((resolve, reject) => {
-    console.log("detectLabels");
-    if (!context.qrCode) {
-        let rekognition = new AWS.Rekognition({region: 'us-east-1'});
-        let params = {
-            Image: {
-                S3Object: {
-                    Bucket: IMAGE_BUCKET,
-                    Name: context.filename
-                }
-            },
-            MaxLabels: 15,
-            MinConfidence: 70
-        };
-        rekognition.detectLabels(params, (err, data) => {
-            if (err) reject(err, err.stack); // an error occurred
-            else {
-                console.log(data);           // successful response
-                context.labels = data.Labels;
-                resolve(context);
-            }
-        });
-    } else
-        resolve(context);
-});
 
 const sendTextMessage = (senderFbId, text) => new Promise((resolve, reject) => {
     let json = {
