@@ -19,10 +19,13 @@ Parameters:
     Default: $LATEST
   BotName:
     Type: String
-    Default: ChatBot_ExcelLexBot
+    Default: InfoDay_InfoDayBot
   GoogleApiKey:
     Type: String
     NoEcho: true
+  AllowedLanguages:
+    Type: String
+    Default: zh-TW,en
 Resources:
   DecodeQrcode:
     Type: AWS::Serverless::Function
@@ -42,7 +45,7 @@ Resources:
         Bucket: !Ref SourceBucket
         Key: QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar
 
-  FacebookLexProxy:
+  FacebookLexInterceptor:
     Type: AWS::Serverless::Function
     Properties:
       Handler: facebookInterceptor.handler
@@ -85,6 +88,7 @@ Resources:
           GOOGLE_API_KEY: !Ref GoogleApiKey
           IMAGE_BUCKET: !Ref ImageBucket
           SESSION_TABLE_NAME : !Ref SessionTable
+          ALLOWED_LANGUAGES: !Ref AllowedLanguages
       Events:
         PostMessage:
           Type: Api

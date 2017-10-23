@@ -1,11 +1,14 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: Lex Interceptor
 Parameters:
+  AllowedLanguages:
+    Default: zh-TW,en
+    Type: String
   BotAlas:
     Default: $LATEST
     Type: String
   BotName:
-    Default: ChatBot_ExcelLexBot
+    Default: InfoDay_InfoDayBot
     Type: String
   FacebookPageToken:
     Description: Facebook Page Token
@@ -50,6 +53,8 @@ Resources:
       Description: Interceptor Facebook Request
       Environment:
         Variables:
+          ALLOWED_LANGUAGES:
+            Ref: AllowedLanguages
           BOT_ALIAS:
             Ref: BotAlas
           BOT_NAME:
