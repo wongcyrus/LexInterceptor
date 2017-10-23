@@ -5,6 +5,7 @@ const GoogleTranslator = require('./lib/GoogleTranslator');
 const ImageProcessor = require('./lib/ImageProcessor');
 const StorageController = require("./lib/StorageController");
 const LexController = require("./lib/LexController");
+const SimpleTableController = require("./lib/SimpleTableController");
 
 const PAGE_TOKEN = process.env.PAGE_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -13,6 +14,7 @@ const BOT_ALIAS = process.env.BOT_ALIAS;
 const BOT_NAME = process.env.BOT_NAME;
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const IMAGE_BUCKET = process.env.IMAGE_BUCKET;
+const SESSION_TABLE_NAME = process.env.SESSION_TABLE_NAME;
 
 exports.handler = (event, context, callback) => {
     console.log(JSON.stringify(event));
@@ -51,25 +53,33 @@ exports.handler = (event, context, callback) => {
     }
 };
 
+
 const processMessage = messagingEvent => new Promise((resolve, reject) => {
     console.log(JSON.stringify(messagingEvent));
+    let googleTranslator = new GoogleTranslator(GOOGLE_API_KEY);
+    let lexController = new LexController(BOT_NAME, BOT_ALIAS);
     if (messagingEvent.message.attachments) {   //Facebook Attachments
-        let imageLinks = messagingEvent.message.attachments.map(c => c.payload.url);
+        let imageLinks = messagingEvent.message.attachments
+        //.filter(c => c.type === "image")
+            .map(c => c.payload.url);
+
         console.log("Receive links: " + imageLinks);
         Promise.all(imageLinks.map(processImage))
-            .then(data => sendTextMessage(messagingEvent.sender.id, JSON.stringify(data)))
+            .then(saveImageDataToSessionTable(messagingEvent))
+            .then(c => lexController.postText(c))
+            .then(c => googleTranslator.translateReply(c))
+            .then(messagingEvent => sendTextMessage(messagingEvent.sender.id, messagingEvent.message.reply))
             .then(resolve)
             .catch(reject);
     } else {
         if (messagingEvent.message && messagingEvent.message.text) {
-            let googleTranslator = new GoogleTranslator(GOOGLE_API_KEY);
-            let lexController = new LexController(BOT_NAME, BOT_ALIAS);
+
             let text = messagingEvent.message.text;
             console.log("Receive a message: " + text);
             googleTranslator.detectLanguage(messagingEvent)
-                .then(googleTranslator.translateRequest)
-                .then(lexController.postText)
-                .then(googleTranslator.translateReply)
+                .then(c => googleTranslator.translateRequest(c))
+                .then(c => lexController.postText(c))
+                .then(c => googleTranslator.translateReply(c))
                 .then(messagingEvent => sendTextMessage(messagingEvent.sender.id, messagingEvent.message.reply))
                 .then(resolve)
                 .catch(reject);
@@ -77,14 +87,27 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
     }
 });
 
+const saveImageDataToSessionTable = (messagingEvent) => {
+    return imageData => new Promise((resolve, reject) => {
+        //Save into Session and send send "OK" to Lex.
+        messagingEvent.sessionAttributes = {imageData: JSON.stringify(imageData)};
+        let sessionTable = new SimpleTableController(SESSION_TABLE_NAME);
+        sessionTable.put({id: messagingEvent.sender.id, data: imageData})
+            .then(data => {
+                messagingEvent.message = {text: "OK", language: "en"};
+                resolve(messagingEvent);
+            }).catch(reject);
+    });
+};
+
 const processImage = imageLink => {
     console.log("processImage:" + imageLink);
-    let imageProcessor = new ImageProcessor(QRCODE_FUNCTION);
+    let imageProcessor = new ImageProcessor(QRCODE_FUNCTION, IMAGE_BUCKET);
     let storageController = new StorageController(IMAGE_BUCKET);
     return storageController.downloadImage(imageLink)
-        .then(storageController.uploadToS3)
-        .then(imageProcessor.qrCodeDecode)
-        .then(imageProcessor.detectLabels);
+        .then(c => storageController.uploadToS3(c))
+        .then(c => imageProcessor.qrCodeDecode(c))
+        .then(c => imageProcessor.detectLabels(c));
 };
 
 const createResponse = (statusCode, body) => {
