@@ -58,13 +58,23 @@ Resources:
         - AWSLambdaExecute # Managed Policy
         - AWSXrayWriteOnlyAccess
         - AmazonRekognitionFullAccess
+        - AmazonDynamoDBFullAccess
         - Version: '2012-10-17' # Policy Document
           Statement:
-           - Effect: Allow
-             Action:
-             - lambda:InvokeFunction
-             - lex:PostText
-             Resource: "*"
+            - Effect: Allow
+              Action:
+              - lambda:InvokeFunction
+              - lex:PostText
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - dynamodb:Scan
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+              Resource:
+              - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SessionTable}
       Environment:
         Variables:
           QRCODE_FUNCTION: !Ref DecodeQrcode
@@ -74,6 +84,7 @@ Resources:
           BOT_NAME: !Ref BotName
           GOOGLE_API_KEY: !Ref GoogleApiKey
           IMAGE_BUCKET: !Ref ImageBucket
+          SESSION_TABLE_NAME : !Ref SessionTable
       Events:
         PostMessage:
           Type: Api
@@ -90,3 +101,6 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       AccessControl: Private
+
+  SessionTable:
+    Type: AWS::Serverless::SimpleTable
