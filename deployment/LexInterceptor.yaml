@@ -88,6 +88,7 @@ Resources:
           GOOGLE_API_KEY: !Ref GoogleApiKey
           IMAGE_BUCKET: !Ref ImageBucket
           SESSION_TABLE_NAME : !Ref SessionTable
+          IMAGE_TABLE: !Ref ImageTable
           ALLOWED_LANGUAGES: !Ref AllowedLanguages
       Events:
         PostMessage:
@@ -107,4 +108,7 @@ Resources:
       AccessControl: Private
 
   SessionTable:
+    Type: AWS::Serverless::SimpleTable
+
+  ImageTable:
     Type: AWS::Serverless::SimpleTable
