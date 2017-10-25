@@ -12,5 +12,5 @@ aws cloudformation deploy ^
     --region us-east-1^
     --capabilities CAPABILITY_IAM ^
     --template-file LexInterceptor-packaged-template.yaml --stack-name LexInterceptor ^
-    --parameter-overrides GoogleApiKey=%GoogleApiKey% FacebookPageToken=%FacebookPageToken%
+    --parameter-overrides GoogleApiKey=%GoogleApiKey% FacebookPageToken=%FacebookPageToken% FacebookVerifyToken=%FacebookVerifyToken%
 

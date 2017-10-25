@@ -44,7 +44,7 @@ Resources:
       Timeout: 60
       Tracing: Active
     Type: AWS::Serverless::Function
-  FacebookLexProxy:
+  FacebookLexInterceptor:
     Properties:
       CodeUri:
         Bucket:
@@ -63,6 +63,8 @@ Resources:
             Ref: GoogleApiKey
           IMAGE_BUCKET:
             Ref: ImageBucket
+          IMAGE_TABLE:
+            Ref: ImageTable
           PAGE_TOKEN:
             Ref: FacebookPageToken
           QRCODE_FUNCTION:
@@ -113,6 +115,8 @@ Resources:
     Properties:
       AccessControl: Private
     Type: AWS::S3::Bucket
+  ImageTable:
+    Type: AWS::Serverless::SimpleTable
   SessionTable:
     Type: AWS::Serverless::SimpleTable
 Transform: AWS::Serverless-2016-10-31

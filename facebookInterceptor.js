@@ -6,6 +6,7 @@ const ImageProcessor = require('./lib/ImageProcessor');
 const StorageController = require("./lib/StorageController");
 const LexController = require("./lib/LexController");
 const SimpleTableController = require("./lib/SimpleTableController");
+const SessionTracker = require("./lib/SessionTracker");
 
 const PAGE_TOKEN = process.env.PAGE_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -15,6 +16,7 @@ const BOT_NAME = process.env.BOT_NAME;
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const IMAGE_BUCKET = process.env.IMAGE_BUCKET;
 const SESSION_TABLE_NAME = process.env.SESSION_TABLE_NAME;
+const IMAGE_TABLE = process.env.IMAGE_TABLE;
 const ALLOWED_LANGUAGES = process.env.ALLOWED_LANGUAGES;
 
 exports.handler = (event, context, callback) => {
@@ -59,41 +61,51 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
     console.log(JSON.stringify(messagingEvent));
     let googleTranslator = new GoogleTranslator(GOOGLE_API_KEY, ALLOWED_LANGUAGES);
     let lexController = new LexController(BOT_NAME, BOT_ALIAS);
+    let sessionTracker = new SessionTracker(SESSION_TABLE_NAME);
+
+    let process;
     if (messagingEvent.message.attachments) {   //Facebook Attachments
         let imageLinks = messagingEvent.message.attachments
         //.filter(c => c.type === "image")
             .map(c => c.payload.url);
 
         console.log("Receive links: " + imageLinks);
-        Promise.all(imageLinks.map(processImage))
-            .then(saveImageDataToSessionTable(messagingEvent))
-            .then(c => lexController.postText(c))
+        process = Promise.all(imageLinks.map(processImage))
+            .then(imageData => new Promise((resolve, reject) => {
+                    messagingEvent.imageData = imageData;
+                    resolve(messagingEvent);
+                }
+            )).then(c => sessionTracker.restoreLastSession(c))
+            .then(saveImageDataToSessionTable);
+    } else {
+        if (messagingEvent.message && messagingEvent.message.text) {
+            let text = messagingEvent.message.text;
+            console.log("Receive a message: " + text);
+            process = googleTranslator.detectLanguage(messagingEvent)
+                .then(c => sessionTracker.restoreLastSession(c))
+                .then(c => googleTranslator.translateRequest(c));
+        }
+    }
+    if (process) {
+        process.then(c => lexController.postText(c))
+            .then(c => sessionTracker.saveCurrentSession(c))
             .then(c => googleTranslator.translateReply(c))
             .then(messagingEvent => sendTextMessage(messagingEvent.sender.id, messagingEvent.message.reply))
             .then(resolve)
             .catch(reject);
-    } else {
-        if (messagingEvent.message && messagingEvent.message.text) {
-
-            let text = messagingEvent.message.text;
-            console.log("Receive a message: " + text);
-            googleTranslator.detectLanguage(messagingEvent)
-                .then(c => googleTranslator.translateRequest(c))
-                .then(c => lexController.postText(c))
-                .then(c => googleTranslator.translateReply(c))
-                .then(messagingEvent => sendTextMessage(messagingEvent.sender.id, messagingEvent.message.reply))
-                .then(resolve)
-                .catch(reject);
-        }
     }
 });
 
 const saveImageDataToSessionTable = (messagingEvent) => {
-    return imageData => new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
         //Save into Session and send send "OK" to Lex.
-        messagingEvent.sessionAttributes = {imageData: JSON.stringify(imageData)};
-        let sessionTable = new SimpleTableController(SESSION_TABLE_NAME);
-        sessionTable.put({id: messagingEvent.sender.id, data: imageData})
+        let sessionAttributes = messagingEvent.sessionAttributes ? messagingEvent.sessionAttributes : {};
+        //Lex sessionAttributes does not support tree like json!
+        sessionAttributes.imageData = "true";
+        messagingEvent.sessionAttributes = sessionAttributes;
+
+        let imageTable = new SimpleTableController(IMAGE_TABLE);
+        imageTable.put({id: messagingEvent.sender.id, data: messagingEvent.imageData})
             .then(data => {
                 messagingEvent.message = {text: "OK", language: "en"};
                 resolve(messagingEvent);
