@@ -6,7 +6,8 @@
     "aws-sdk": "^2.135.0",
     "aws-xray-sdk": "^1.1.4",
     "google-translate": "^2.0.5",
-    "image-downloader": "^3.3.0"
+    "image-downloader": "^3.3.0",
+    "randomstring": "^1.1.5"
   },
   "devDependencies": {
     "aws-sdk": "^2.135.0",
