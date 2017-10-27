@@ -7,6 +7,7 @@ const StorageController = require("./lib/StorageController");
 const LexController = require("./lib/LexController");
 const SimpleTableController = require("./lib/SimpleTableController");
 const SessionTracker = require("./lib/SessionTracker");
+const AudioConverter = require("./lib/AudioConverter");
 
 const PAGE_TOKEN = process.env.PAGE_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -18,6 +19,7 @@ const IMAGE_BUCKET = process.env.IMAGE_BUCKET;
 const SESSION_TABLE_NAME = process.env.SESSION_TABLE_NAME;
 const IMAGE_TABLE = process.env.IMAGE_TABLE;
 const ALLOWED_LANGUAGES = process.env.ALLOWED_LANGUAGES;
+
 
 exports.handler = (event, context, callback) => {
     console.log(JSON.stringify(event));
@@ -65,18 +67,43 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
 
     let process;
     if (messagingEvent.message.attachments) {   //Facebook Attachments
-        let imageLinks = messagingEvent.message.attachments
-        //.filter(c => c.type === "image")
+
+        let attachments = messagingEvent.message.attachments;
+        console.log("attachments", JSON.stringify(attachments));
+
+        let imageLinks = attachments
+            .filter(c => c.type === "image")
             .map(c => c.payload.url);
 
-        console.log("Receive links: " + imageLinks);
-        process = Promise.all(imageLinks.map(processImage))
-            .then(imageData => new Promise((resolve, reject) => {
-                    messagingEvent.imageData = imageData;
-                    resolve(messagingEvent);
-                }
-            )).then(c => sessionTracker.restoreLastSession(c))
-            .then(saveImageDataToSessionTable);
+        let audioLinks = attachments
+            .filter(c => c.type === "audio")
+            .map(c => c.payload.url);
+
+        if (audioLinks) {
+            console.log("Audio link: " + audioLinks);
+
+            process = processAudio(audioLinks[0])
+                .then(voice => new Promise((resolve, reject) => {
+                        messagingEvent.voice = voice;
+                        resolve(messagingEvent);
+                    }
+                ))
+                .then(c => sessionTracker.restoreLastSession(c))
+                .then(c => googleTranslator.translateRequest(c));
+
+        } else if (imageLinks) {
+            console.log("Image links: " + imageLinks);
+
+            process = Promise.all(imageLinks.map(processImage))
+                .then(imageData => new Promise((resolve, reject) => {
+                        messagingEvent.imageData = imageData;
+                        resolve(messagingEvent);
+                    }
+                )).then(c => sessionTracker.restoreLastSession(c))
+                .then(saveImageDataToSessionTable);
+        } else {
+            reject("Unsupported file type!");
+        }
     } else {
         if (messagingEvent.message && messagingEvent.message.text) {
             let text = messagingEvent.message.text;
@@ -117,10 +144,20 @@ const processImage = imageLink => {
     console.log("processImage:" + imageLink);
     let imageProcessor = new ImageProcessor(QRCODE_FUNCTION, IMAGE_BUCKET);
     let storageController = new StorageController(IMAGE_BUCKET);
-    return storageController.downloadImage(imageLink)
+    return storageController.downloadToTmp(imageLink)
         .then(c => storageController.uploadToS3(c))
         .then(c => imageProcessor.qrCodeDecode(c))
         .then(c => imageProcessor.detectLabels(c));
+};
+
+const processAudio = audioLink => {
+    console.log("processAudio:" + audioLink);
+    let audioConverter = new AudioConverter();
+    let storageController = new StorageController(IMAGE_BUCKET);
+    return storageController.downloadToTmp(audioLink)
+        .then(c => storageController.uploadToS3(c))
+        .then(c => audioConverter.convertToLinear16(c))
+        .then(c => storageController.uploadToS3(c));
 };
 
 const createResponse = (statusCode, body) => {
