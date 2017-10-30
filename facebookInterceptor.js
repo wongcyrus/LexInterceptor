@@ -8,6 +8,7 @@ const LexController = require("./lib/LexController");
 const SimpleTableController = require("./lib/SimpleTableController");
 const SessionTracker = require("./lib/SessionTracker");
 const AudioConverter = require("./lib/AudioConverter");
+const SpeechRecognizer = require("./lib/SpeechRecognizer");
 
 const PAGE_TOKEN = process.env.PAGE_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -15,10 +16,11 @@ const QRCODE_FUNCTION = process.env.QRCODE_FUNCTION;
 const BOT_ALIAS = process.env.BOT_ALIAS;
 const BOT_NAME = process.env.BOT_NAME;
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
-const IMAGE_BUCKET = process.env.IMAGE_BUCKET;
+const ATTACHMENT_BUCKET = process.env.ATTACHMENT_BUCKET;
 const SESSION_TABLE_NAME = process.env.SESSION_TABLE_NAME;
 const IMAGE_TABLE = process.env.IMAGE_TABLE;
 const ALLOWED_LANGUAGES = process.env.ALLOWED_LANGUAGES;
+const SPEECH_RECOGNIZE_LANGUAGE = process.env.SPEECH_RECOGNIZE_LANGUAGE;
 
 
 exports.handler = (event, context, callback) => {
@@ -53,6 +55,7 @@ exports.handler = (event, context, callback) => {
             }).catch(reason => {
             console.log(reason);
             console.log("Call back with Error");
+            sendTextMessage(messagingEvent.sender.id, reason);
             callback(null, createResponse(200, reason));
         });
     }
@@ -79,21 +82,27 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
             .filter(c => c.type === "audio")
             .map(c => c.payload.url);
 
-        if (audioLinks) {
-            console.log("Audio link: " + audioLinks);
 
+        if (audioLinks.length === 1) {
+            console.log("Audio links: " + audioLinks);
             process = processAudio(audioLinks[0])
                 .then(voice => new Promise((resolve, reject) => {
-                        messagingEvent.voice = voice;
-                        resolve(messagingEvent);
+                        messagingEvent.message = voice.message;
+                        if (messagingEvent.message.text !== "") {
+                            sendTextMessage(messagingEvent.sender.id, "(" + messagingEvent.message.text + ")");
+                            resolve(messagingEvent);
+                        } else {
+                            sendTextMessage(messagingEvent.sender.id, "Sorry, I cannot recognize your speech!");
+                            reject("Cannot recognize Audio.");
+                        }
                     }
                 ))
+                .then(c => googleTranslator.detectLanguage(c))
                 .then(c => sessionTracker.restoreLastSession(c))
                 .then(c => googleTranslator.translateRequest(c));
 
-        } else if (imageLinks) {
+        } else if (imageLinks.length > 0) {
             console.log("Image links: " + imageLinks);
-
             process = Promise.all(imageLinks.map(processImage))
                 .then(imageData => new Promise((resolve, reject) => {
                         messagingEvent.imageData = imageData;
@@ -142,8 +151,8 @@ const saveImageDataToSessionTable = (messagingEvent) => {
 
 const processImage = imageLink => {
     console.log("processImage:" + imageLink);
-    let imageProcessor = new ImageProcessor(QRCODE_FUNCTION, IMAGE_BUCKET);
-    let storageController = new StorageController(IMAGE_BUCKET);
+    let imageProcessor = new ImageProcessor(QRCODE_FUNCTION, ATTACHMENT_BUCKET);
+    let storageController = new StorageController(ATTACHMENT_BUCKET);
     return storageController.downloadToTmp(imageLink)
         .then(c => storageController.uploadToS3(c))
         .then(c => imageProcessor.qrCodeDecode(c))
@@ -153,11 +162,14 @@ const processImage = imageLink => {
 const processAudio = audioLink => {
     console.log("processAudio:" + audioLink);
     let audioConverter = new AudioConverter();
-    let storageController = new StorageController(IMAGE_BUCKET);
+    let storageController = new StorageController(ATTACHMENT_BUCKET);
+    let speechRecognizer = new SpeechRecognizer(GOOGLE_API_KEY, SPEECH_RECOGNIZE_LANGUAGE);
+
     return storageController.downloadToTmp(audioLink)
         .then(c => storageController.uploadToS3(c))
         .then(c => audioConverter.convertToLinear16(c))
-        .then(c => storageController.uploadToS3(c));
+        .then(c => storageController.uploadToS3(c))
+        .then(c => speechRecognizer.getText(c));
 };
 
 const createResponse = (statusCode, body) => {

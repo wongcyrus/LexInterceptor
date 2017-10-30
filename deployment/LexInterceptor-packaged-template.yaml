@@ -25,7 +25,14 @@ Parameters:
     Default: howwhofeelinvideopackage
     Description: Bucket Lambda deployment packages
     Type: String
+  SpeechRecognizeLanguage:
+    Default: yue-Hant-HK
+    Type: String
 Resources:
+  AttachmentBucket:
+    Properties:
+      AccessControl: Private
+    Type: AWS::S3::Bucket
   DecodeQrcode:
     Properties:
       CodeUri:
@@ -55,14 +62,14 @@ Resources:
         Variables:
           ALLOWED_LANGUAGES:
             Ref: AllowedLanguages
+          ATTACHMENT_BUCKET:
+            Ref: AttachmentBucket
           BOT_ALIAS:
             Ref: BotAlas
           BOT_NAME:
             Ref: BotName
           GOOGLE_API_KEY:
             Ref: GoogleApiKey
-          IMAGE_BUCKET:
-            Ref: ImageBucket
           IMAGE_TABLE:
             Ref: ImageTable
           PAGE_TOKEN:
@@ -71,6 +78,8 @@ Resources:
             Ref: DecodeQrcode
           SESSION_TABLE_NAME:
             Ref: SessionTable
+          SPEECH_RECOGNIZE_LANGUAGE:
+            Ref: SpeechRecognizeLanguage
           VERIFY_TOKEN:
             Ref: FacebookVerifyToken
       Events:
@@ -111,10 +120,6 @@ Resources:
       Timeout: 60
       Tracing: Active
     Type: AWS::Serverless::Function
-  ImageBucket:
-    Properties:
-      AccessControl: Private
-    Type: AWS::S3::Bucket
   ImageTable:
     Type: AWS::Serverless::SimpleTable
   SessionTable:
