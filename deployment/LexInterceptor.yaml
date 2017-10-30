@@ -71,6 +71,8 @@ Resources:
               Action:
               - lambda:InvokeFunction
               - lex:PostText
+              - polly:DescribeVoices
+              - polly:SynthesizeSpeech
               Resource: "*"
             - Effect: Allow
               Action:
@@ -90,6 +92,8 @@ Resources:
           BOT_NAME: !Ref BotName
           GOOGLE_API_KEY: !Ref GoogleApiKey
           ATTACHMENT_BUCKET: !Ref AttachmentBucket
+          VOICE_BUCKET: !Ref VoiceBucket
+          VOICE_SITE_URL:  !GetAtt VoiceBucket.WebsiteURL
           SESSION_TABLE_NAME : !Ref SessionTable
           IMAGE_TABLE: !Ref ImageTable
           ALLOWED_LANGUAGES: !Ref AllowedLanguages
@@ -110,6 +114,32 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       AccessControl: Private
+
+  VoiceBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+    DeletionPolicy: Retain
+  VoiceBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      PolicyDocument:
+        Id: VoiceBucketPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref VoiceBucket
+                - /*
+      Bucket: !Ref VoiceBucket
 
   SessionTable:
     Type: AWS::Serverless::SimpleTable
