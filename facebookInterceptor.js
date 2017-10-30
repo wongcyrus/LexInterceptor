@@ -7,8 +7,9 @@ const StorageController = require("./lib/StorageController");
 const LexController = require("./lib/LexController");
 const SimpleTableController = require("./lib/SimpleTableController");
 const SessionTracker = require("./lib/SessionTracker");
-const AudioConverter = require("./lib/AudioConverter");
+const AudioConverter = require("./lib/AudioFormatConverter");
 const SpeechRecognizer = require("./lib/SpeechRecognizer");
+const TextSpeechController = require("./lib/TextSpeechController");
 
 const PAGE_TOKEN = process.env.PAGE_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -17,6 +18,8 @@ const BOT_ALIAS = process.env.BOT_ALIAS;
 const BOT_NAME = process.env.BOT_NAME;
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const ATTACHMENT_BUCKET = process.env.ATTACHMENT_BUCKET;
+const VOICE_BUCKET = process.env.VOICE_BUCKET;
+const VOICE_SITE_URL = process.env.VOICE_SITE_URL;
 const SESSION_TABLE_NAME = process.env.SESSION_TABLE_NAME;
 const IMAGE_TABLE = process.env.IMAGE_TABLE;
 const ALLOWED_LANGUAGES = process.env.ALLOWED_LANGUAGES;
@@ -89,7 +92,7 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
                 .then(voice => new Promise((resolve, reject) => {
                         messagingEvent.message = voice.message;
                         if (messagingEvent.message.text !== "") {
-                            sendTextMessage(messagingEvent.sender.id, "(" + messagingEvent.message.text + ")");
+                            sendTextMessage(messagingEvent.sender.id, "You: " + messagingEvent.message.text);
                             resolve(messagingEvent);
                         } else {
                             sendTextMessage(messagingEvent.sender.id, "Sorry, I cannot recognize your speech!");
@@ -106,6 +109,12 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
             process = Promise.all(imageLinks.map(processImage))
                 .then(imageData => new Promise((resolve, reject) => {
                         messagingEvent.imageData = imageData;
+                    let sessionAttributes = messagingEvent.sessionAttributes || {};
+                    if (sessionAttributes.currentSlot) {
+                        console.log("Save currentSlot translated text for Images");
+                        sessionAttributes["original_" + sessionAttributes.currentSlot] = "" + imageLinks;
+                        sessionAttributes["translated_" + sessionAttributes.currentSlot] = "" + imageLinks;
+                    }
                         resolve(messagingEvent);
                     }
                 )).then(c => sessionTracker.restoreLastSession(c))
@@ -123,9 +132,13 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
         }
     }
     if (process) {
+        let textSpeechController = new TextSpeechController();
+        let storageController = new StorageController(VOICE_BUCKET);
         process.then(c => lexController.postText(c))
             .then(c => sessionTracker.saveCurrentSession(c))
             .then(c => googleTranslator.translateReply(c))
+            .then(c => textSpeechController.getSpeech(c))
+            .then(c => storageController.uploadToS3(c))
             .then(messagingEvent => sendTextMessage(messagingEvent.sender.id, messagingEvent.message.reply))
             .then(resolve)
             .catch(reject);

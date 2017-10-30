@@ -82,6 +82,12 @@ Resources:
             Ref: SpeechRecognizeLanguage
           VERIFY_TOKEN:
             Ref: FacebookVerifyToken
+          VOICE_BUCKET:
+            Ref: VoiceBucket
+          VOICE_SITE_URL:
+            Fn::GetAtt:
+            - VoiceBucket
+            - WebsiteURL
       Events:
         GetMessage:
           Properties:
@@ -104,6 +110,8 @@ Resources:
         - Action:
           - lambda:InvokeFunction
           - lex:PostText
+          - polly:DescribeVoices
+          - polly:SynthesizeSpeech
           Effect: Allow
           Resource: '*'
         - Action:
@@ -124,4 +132,31 @@ Resources:
     Type: AWS::Serverless::SimpleTable
   SessionTable:
     Type: AWS::Serverless::SimpleTable
+  VoiceBucket:
+    DeletionPolicy: Retain
+    Properties:
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        ErrorDocument: error.html
+        IndexDocument: index.html
+    Type: AWS::S3::Bucket
+  VoiceBucketPolicy:
+    Properties:
+      Bucket:
+        Ref: VoiceBucket
+      PolicyDocument:
+        Id: VoiceBucketPolicy
+        Statement:
+        - Action: s3:GetObject
+          Effect: Allow
+          Principal: '*'
+          Resource:
+            Fn::Join:
+            - ''
+            - - 'arn:aws:s3:::'
+              - Ref: VoiceBucket
+              - /*
+          Sid: PublicReadForGetBucketObjects
+        Version: 2012-10-17
+    Type: AWS::S3::BucketPolicy
 Transform: AWS::Serverless-2016-10-31
