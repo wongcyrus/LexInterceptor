@@ -26,6 +26,9 @@ Parameters:
   AllowedLanguages:
     Type: String
     Default: zh-TW,en
+  SpeechRecognizeLanguage:
+    Type: String
+    Default: yue-Hant-HK
 Resources:
   DecodeQrcode:
     Type: AWS::Serverless::Function
@@ -86,10 +89,11 @@ Resources:
           BOT_ALIAS: !Ref BotAlas
           BOT_NAME: !Ref BotName
           GOOGLE_API_KEY: !Ref GoogleApiKey
-          IMAGE_BUCKET: !Ref ImageBucket
+          ATTACHMENT_BUCKET: !Ref AttachmentBucket
           SESSION_TABLE_NAME : !Ref SessionTable
           IMAGE_TABLE: !Ref ImageTable
           ALLOWED_LANGUAGES: !Ref AllowedLanguages
+          SPEECH_RECOGNIZE_LANGUAGE: !Ref SpeechRecognizeLanguage
       Events:
         PostMessage:
           Type: Api
@@ -102,7 +106,7 @@ Resources:
             Path: /
             Method: get
 
-  ImageBucket:
+  AttachmentBucket:
     Type: AWS::S3::Bucket
     Properties:
       AccessControl: Private
