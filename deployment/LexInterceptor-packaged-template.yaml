@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Lex Interceptor
 Parameters:
   AllowedLanguages:
-    Default: zh-TW,en
+    Default: zh-TW,zh-HK,en
     Type: String
   BotAlas:
     Default: $LATEST
@@ -27,6 +27,9 @@ Parameters:
     Type: String
   SpeechRecognizeLanguage:
     Default: yue-Hant-HK
+    Type: String
+  SynthesizeSpeechLanguageHints:
+    Default: '{"zh":"zh-HK"}'
     Type: String
 Resources:
   AttachmentBucket:
@@ -80,6 +83,10 @@ Resources:
             Ref: SessionTable
           SPEECH_RECOGNIZE_LANGUAGE:
             Ref: SpeechRecognizeLanguage
+          SYNTHESIZE_SPEECH_LANGUAGE_HINTS:
+            Ref: SynthesizeSpeechLanguageHints
+          TRANSLATION_CACHE_TABLE:
+            Ref: TranslationCacheTable
           VERIFY_TOKEN:
             Ref: FacebookVerifyToken
           VOICE_BUCKET:
@@ -131,6 +138,8 @@ Resources:
   ImageTable:
     Type: AWS::Serverless::SimpleTable
   SessionTable:
+    Type: AWS::Serverless::SimpleTable
+  TranslationCacheTable:
     Type: AWS::Serverless::SimpleTable
   VoiceBucket:
     DeletionPolicy: Retain
