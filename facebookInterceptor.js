@@ -21,9 +21,15 @@ const VOICE_BUCKET = process.env.VOICE_BUCKET;
 const VOICE_SITE_URL = process.env.VOICE_SITE_URL;
 const SESSION_TABLE_NAME = process.env.SESSION_TABLE_NAME;
 const IMAGE_TABLE = process.env.IMAGE_TABLE;
+const TRANSLATION_CACHE_TABLE = process.env.TRANSLATION_CACHE_TABLE;
 const ALLOWED_LANGUAGES = process.env.ALLOWED_LANGUAGES;
 const SPEECH_RECOGNIZE_LANGUAGE = process.env.SPEECH_RECOGNIZE_LANGUAGE;
+const SYNTHESIZE_SPEECH_LANGUAGE_HINTS = process.env.SYNTHESIZE_SPEECH_LANGUAGE_HINTS;
 
+const googleTranslator = new GoogleTranslator(GOOGLE_API_KEY, ALLOWED_LANGUAGES);
+const lexController = new LexController(BOT_NAME, BOT_ALIAS);
+const sessionTracker = new SessionTracker(SESSION_TABLE_NAME);
+const facebookMessenger = new FacebookMessenger(PAGE_TOKEN);
 
 exports.handler = (event, context, callback) => {
     console.log(JSON.stringify(event));
@@ -65,11 +71,6 @@ exports.handler = (event, context, callback) => {
 
 const processMessage = messagingEvent => new Promise((resolve, reject) => {
     console.log(JSON.stringify(messagingEvent));
-    let googleTranslator = new GoogleTranslator(GOOGLE_API_KEY, ALLOWED_LANGUAGES);
-    let lexController = new LexController(BOT_NAME, BOT_ALIAS);
-    let sessionTracker = new SessionTracker(SESSION_TABLE_NAME);
-    let facebookMessenger = new FacebookMessenger(PAGE_TOKEN);
-
     let process;
     if (messagingEvent.message.attachments) {   //Facebook Attachments
 
@@ -130,7 +131,7 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
         }
     }
     if (process) {
-        let textSpeechController = new TextSpeechController();
+        let textSpeechController = new TextSpeechController(SYNTHESIZE_SPEECH_LANGUAGE_HINTS);
         let storageController = new StorageController(VOICE_BUCKET);
         process.then(c => lexController.postText(c))
             .then(c => sessionTracker.saveCurrentSession(c))
@@ -159,7 +160,7 @@ const saveImageDataToSessionTable = (messagingEvent) => {
         let imageTable = new SimpleTableController(IMAGE_TABLE);
         imageTable.put({id: messagingEvent.sender.id, data: messagingEvent.imageData})
             .then(data => {
-                messagingEvent.message = {text: "OK", language: "en"};
+                messagingEvent.message = {text: "OK", language: googleTranslator.getDefaultLanguages()};
                 resolve(messagingEvent);
             }).catch(reject);
     });
