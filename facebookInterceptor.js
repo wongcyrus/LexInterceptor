@@ -58,7 +58,6 @@ exports.handler = (event, context, callback) => {
             }).catch(reason => {
             console.log(reason);
             console.log("Call back with Error");
-            sendTextMessage(messagingEvent.sender.id, reason);
             callback(null, createResponse(200, reason));
         });
     }
@@ -139,7 +138,12 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
             .then(c => googleTranslator.translateReply(c))
             .then(c => textSpeechController.getSpeech(c))
             .then(c => storageController.uploadToS3(c))
-            .then(messagingEvent => sendTextMessage(messagingEvent.sender.id, messagingEvent.message.reply))
+            .then(messagingEvent => {
+                console.log("sendTextMessage", messagingEvent);
+                let voiceUrl = VOICE_SITE_URL + "/" + messagingEvent.Key;
+                return sendVoiceMessage(messagingEvent.sender.id, voiceUrl)
+                    .then(sendTextMessage(messagingEvent.sender.id, messagingEvent.message.reply));
+            })
             .then(resolve)
             .catch(reject);
     }
@@ -195,8 +199,28 @@ const createResponse = (statusCode, body) => {
 const sendTextMessage = (senderFbId, text) => new Promise((resolve, reject) => {
     let json = {
         recipient: {id: senderFbId},
-        message: {text: text},
+        message: {text},
     };
+    console.log("sendTextMessage");
+    _sendMessage(senderFbId, json, resolve, reject);
+});
+const sendVoiceMessage = (senderFbId, url) => new Promise((resolve, reject) => {
+    let json = {
+        recipient: {id: senderFbId},
+        message: {
+            attachment: {
+                type: 'audio',
+                payload: {
+                    url,
+                    is_reusable: true
+                }
+            }
+        }
+    };
+    console.log("sendVoiceMessage");
+    _sendMessage(senderFbId, json, resolve, reject);
+});
+const _sendMessage = (senderFbId, json, resolve, reject) => {
     let body = JSON.stringify(json);
     let path = '/v2.6/me/messages?access_token=' + PAGE_TOKEN;
     let options = {
@@ -209,9 +233,10 @@ const sendTextMessage = (senderFbId, text) => new Promise((resolve, reject) => {
         let str = '';
         response.on('data', chunk => {
             str += chunk;
+            console.log(str);
         });
         response.on('end', () => {
-            resolve(`Sent message ${senderFbId}: \n${text}`);
+            resolve(`Sent message ${senderFbId}: \n${body}`);
         });
     };
     let req = https.request(options, callback);
@@ -221,4 +246,4 @@ const sendTextMessage = (senderFbId, text) => new Promise((resolve, reject) => {
     });
     req.write(body);
     req.end();
-});
+};
