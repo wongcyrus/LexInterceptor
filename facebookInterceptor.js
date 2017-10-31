@@ -1,6 +1,4 @@
 'use strict';
-const https = require('https');
-
 const GoogleTranslator = require('./lib/GoogleTranslator');
 const ImageProcessor = require('./lib/ImageProcessor');
 const StorageController = require("./lib/StorageController");
@@ -10,6 +8,7 @@ const SessionTracker = require("./lib/SessionTracker");
 const AudioConverter = require("./lib/AudioFormatConverter");
 const SpeechRecognizer = require("./lib/SpeechRecognizer");
 const TextSpeechController = require("./lib/TextSpeechController");
+const FacebookMessenger = require("./lib/FacebookMessenger");
 
 const PAGE_TOKEN = process.env.PAGE_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -69,6 +68,7 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
     let googleTranslator = new GoogleTranslator(GOOGLE_API_KEY, ALLOWED_LANGUAGES);
     let lexController = new LexController(BOT_NAME, BOT_ALIAS);
     let sessionTracker = new SessionTracker(SESSION_TABLE_NAME);
+    let facebookMessenger = new FacebookMessenger(PAGE_TOKEN);
 
     let process;
     if (messagingEvent.message.attachments) {   //Facebook Attachments
@@ -84,17 +84,16 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
             .filter(c => c.type === "audio")
             .map(c => c.payload.url);
 
-
         if (audioLinks.length === 1) {
             console.log("Audio links: " + audioLinks);
             process = processAudio(audioLinks[0])
                 .then(voice => new Promise((resolve, reject) => {
                         messagingEvent.message = voice.message;
                         if (messagingEvent.message.text !== "") {
-                            sendTextMessage(messagingEvent.sender.id, "You: " + messagingEvent.message.text);
+                            facebookMessenger.sendTextMessage(messagingEvent.sender.id, "You: " + messagingEvent.message.text);
                             resolve(messagingEvent);
                         } else {
-                            sendTextMessage(messagingEvent.sender.id, "Sorry, I cannot recognize your speech!");
+                            facebookMessenger.sendTextMessage(messagingEvent.sender.id, "Sorry, I cannot recognize your speech!");
                             reject("Cannot recognize Audio.");
                         }
                     }
@@ -141,8 +140,8 @@ const processMessage = messagingEvent => new Promise((resolve, reject) => {
             .then(messagingEvent => {
                 console.log("sendTextMessage", messagingEvent);
                 let voiceUrl = VOICE_SITE_URL + "/" + messagingEvent.Key;
-                return sendVoiceMessage(messagingEvent.sender.id, voiceUrl)
-                    .then(sendTextMessage(messagingEvent.sender.id, messagingEvent.message.reply));
+                return facebookMessenger.sendVoiceMessage(messagingEvent.sender.id, voiceUrl)
+                    .then(facebookMessenger.sendTextMessage(messagingEvent.sender.id, messagingEvent.message.reply));
             })
             .then(resolve)
             .catch(reject);
@@ -194,56 +193,4 @@ const createResponse = (statusCode, body) => {
         statusCode: statusCode,
         body: body
     }
-};
-
-const sendTextMessage = (senderFbId, text) => new Promise((resolve, reject) => {
-    let json = {
-        recipient: {id: senderFbId},
-        message: {text},
-    };
-    console.log("sendTextMessage");
-    _sendMessage(senderFbId, json, resolve, reject);
-});
-const sendVoiceMessage = (senderFbId, url) => new Promise((resolve, reject) => {
-    let json = {
-        recipient: {id: senderFbId},
-        message: {
-            attachment: {
-                type: 'audio',
-                payload: {
-                    url,
-                    is_reusable: true
-                }
-            }
-        }
-    };
-    console.log("sendVoiceMessage");
-    _sendMessage(senderFbId, json, resolve, reject);
-});
-const _sendMessage = (senderFbId, json, resolve, reject) => {
-    let body = JSON.stringify(json);
-    let path = '/v2.6/me/messages?access_token=' + PAGE_TOKEN;
-    let options = {
-        host: "graph.facebook.com",
-        path: path,
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'}
-    };
-    let callback = response => {
-        let str = '';
-        response.on('data', chunk => {
-            str += chunk;
-            console.log(str);
-        });
-        response.on('end', () => {
-            resolve(`Sent message ${senderFbId}: \n${body}`);
-        });
-    };
-    let req = https.request(options, callback);
-    req.on('error', e => {
-        console.log('problem with request: ' + e);
-        reject(e)
-    });
-    req.write(body);
-    req.end();
 };
