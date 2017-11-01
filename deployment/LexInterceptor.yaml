@@ -8,6 +8,7 @@ Parameters:
     Description: Bucket Lambda deployment packages (LexInterceptor_latest.zip and QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar)
   FacebookVerifyToken:
     Type: String
+    NoEcho: true
     Description: Facebook Verify Token
   FacebookPageToken:
     Type: String
@@ -44,11 +45,20 @@ Parameters:
       - true
       - false
     Description: Enable DynamoDB AutoScaling
+  DecodeQrcode:
+    Type: String
+    Default: true
+    AllowedValues:
+      - true
+      - false
+    Description: Enable Decode Qrcoede from image attachment.
 Conditions:
   EnableDynamodbAutoscaling: !Equals [ !Ref DynamodbAutoscaling, true ]
+  EnableDecodeQrcode: !Equals [ !Ref DecodeQrcode, true ]
 Resources:
-  DecodeQrcode:
+  DecodeQrcodeFunction:
     Type: AWS::Serverless::Function
+    Condition: EnableDecodeQrcode
     Properties:
       Description: Decode Qrcode by sending in Url string.
       Handler: com.cloudlab.healthAi.qrcode.QrcodeHandler::handleRequest
@@ -65,7 +75,7 @@ Resources:
         Bucket: !Ref SourceBucket
         Key: QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar
 
-  FacebookLexInterceptor:
+  FacebookLexInterceptorFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: facebookInterceptor.handler
@@ -102,7 +112,7 @@ Resources:
               - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SessionTable}
       Environment:
         Variables:
-          QRCODE_FUNCTION: !Ref DecodeQrcode
+          QRCODE_FUNCTION: !If [EnableDecodeQrcode, !Ref DecodeQrcodeFunction, !Ref "AWS::NoValue"]
           PAGE_TOKEN: !Ref FacebookPageToken
           VERIFY_TOKEN: !Ref FacebookVerifyToken
           BOT_ALIAS: !Ref BotAlias
@@ -309,6 +319,7 @@ Metadata:
           - BotName
           - BotAlias
           - DynamodbAutoscaling
+          - DecodeQrcoede
       -
         Label:
           default: Google
@@ -348,3 +359,5 @@ Metadata:
         default: Facebook Page Token
       FacebookVerifyToken:
         default: Facebook Verify Token
+      DecodeQrcoede:
+        default: Decode Qrcoede
