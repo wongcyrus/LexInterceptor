@@ -99,7 +99,6 @@ Resources:
           VOICE_SITE_URL:  !GetAtt VoiceBucket.WebsiteURL
           SESSION_TABLE_NAME : !Ref SessionTable
           IMAGE_TABLE: !Ref ImageTable
-          TRANSLATION_CACHE_TABLE: !Ref TranslationCacheTable
           ALLOWED_LANGUAGES: !Ref AllowedLanguages
           SPEECH_RECOGNIZE_LANGUAGE: !Ref SpeechRecognizeLanguage
           SYNTHESIZE_SPEECH_LANGUAGE_HINTS: !Ref SynthesizeSpeechLanguageHints
@@ -150,7 +149,4 @@ Resources:
     Type: AWS::Serverless::SimpleTable
 
   ImageTable:
-    Type: AWS::Serverless::SimpleTable
-
-  TranslationCacheTable:
     Type: AWS::Serverless::SimpleTable
