@@ -1,5 +1,9 @@
 AWSTemplateFormatVersion: 2010-09-09
 Conditions:
+  EnableDecodeQrcode:
+    Fn::Equals:
+    - Ref: DecodeQrcode
+    - true
   EnableDynamodbAutoscaling:
     Fn::Equals:
     - Ref: DynamodbAutoscaling
@@ -15,6 +19,7 @@ Metadata:
       - BotName
       - BotAlias
       - DynamodbAutoscaling
+      - DecodeQrcoede
     - Label:
         default: Google
       Parameters:
@@ -37,6 +42,8 @@ Metadata:
         default: Lex Bot Alias
       BotName:
         default: Lex Bot Name
+      DecodeQrcoede:
+        default: Decode Qrcoede
       DynamodbAutoscaling:
         default: Dynamodb Autoscaling
       FacebookPageToken:
@@ -66,11 +73,18 @@ Parameters:
     Default: InfoDay_InfoDayBot
     Description: AWS Lex Bot Name
     Type: String
+  DecodeQrcode:
+    AllowedValues:
+    - true
+    - false
+    Default: false
+    Description: Enable Decode Qrcoede from image attachment.
+    Type: String
   DynamodbAutoscaling:
     AllowedValues:
     - true
     - false
-    Default: true
+    Default: false
     Description: Enable DynamoDB AutoScaling
     Type: String
   FacebookPageToken:
@@ -79,6 +93,7 @@ Parameters:
     Type: String
   FacebookVerifyToken:
     Description: Facebook Verify Token
+    NoEcho: true
     Type: String
   GoogleApiKey:
     Description: Google API Key that enabled Translation API and Speech API. (https://codelabs.developers.google.com/codelabs/cloud-speech-intro/index.html?index=..%2F..%2Findex#3)
@@ -105,7 +120,8 @@ Resources:
     Properties:
       AccessControl: Private
     Type: AWS::S3::Bucket
-  DecodeQrcode:
+  DecodeQrcodeFunction:
+    Condition: EnableDecodeQrcode
     Properties:
       CodeUri:
         Bucket:
@@ -153,7 +169,7 @@ Resources:
           Version: 2012-10-17
         PolicyName: lambdaIAMRolePolicy
     Type: AWS::IAM::Role
-  FacebookLexInterceptor:
+  FacebookLexInterceptorFunction:
     Properties:
       CodeUri:
         Bucket:
@@ -179,7 +195,10 @@ Resources:
           PAGE_TOKEN:
             Ref: FacebookPageToken
           QRCODE_FUNCTION:
-            Ref: DecodeQrcode
+            Fn::If:
+            - EnableDecodeQrcode
+            - Ref: DecodeQrcodeFunction
+            - Ref: AWS::NoValue
           SESSION_TABLE_NAME:
             Ref: SessionTable
           SPEECH_RECOGNIZE_LANGUAGE:
