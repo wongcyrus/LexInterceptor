@@ -5,12 +5,17 @@ aws s3 cp ../dist/LexInterceptor_latest.zip s3://howwhofeelinvideopackage/LexInt
 aws cloudformation package ^
     --region us-east-1^
     --template-file LexInterceptor.yaml ^
-    --s3-bucket howwhofeelinvideopackage ^
+    --s3-bucket %SourceBucket% ^
     --output-template-file LexInterceptor-packaged-template.yaml
 
 aws cloudformation deploy ^
     --region us-east-1^
     --capabilities CAPABILITY_IAM ^
     --template-file LexInterceptor-packaged-template.yaml --stack-name LexInterceptor ^
-    --parameter-overrides GoogleApiKey=%GoogleApiKey% FacebookPageToken=%FacebookPageToken% FacebookVerifyToken=%FacebookVerifyToken%
+    --parameter-overrides ^
+    GoogleApiKey=%GoogleApiKey% ^
+    FacebookPageToken=%FacebookPageToken% ^
+    FacebookVerifyToken=%FacebookVerifyToken% ^
+    BotName=%BotName% ^
+    SourceBucket=%SourceBucket%
 

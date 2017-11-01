@@ -1,35 +1,104 @@
 AWSTemplateFormatVersion: 2010-09-09
+Conditions:
+  EnableDynamodbAutoscaling:
+    Fn::Equals:
+    - Ref: DynamodbAutoscaling
+    - true
 Description: Lex Interceptor
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: AWS
+      Parameters:
+      - SourceBucket
+      - BotName
+      - BotAlias
+      - DynamodbAutoscaling
+    - Label:
+        default: Google
+      Parameters:
+      - GoogleApiKey
+      - AllowedLanguages
+      - SpeechRecognizeLanguage
+    - Label:
+        default: ResponsiveVoice.JS
+      Parameters:
+      - SynthesizeSpeechLanguageHints
+    - Label:
+        default: Facebook
+      Parameters:
+      - FacebookPageToken
+      - FacebookVerifyToken
+    ParameterLabels:
+      AllowedLanguages:
+        default: Google Translation Allowed Languages Code List
+      BotAlias:
+        default: Lex Bot Alias
+      BotName:
+        default: Lex Bot Name
+      DynamodbAutoscaling:
+        default: Dynamodb Autoscaling
+      FacebookPageToken:
+        default: Facebook Page Token
+      FacebookVerifyToken:
+        default: Facebook Verify Token
+      GoogleApiKey:
+        default: Google Api Key
+      SourceBucket:
+        default: Source Bucket
+      SpeechRecognizeLanguage:
+        default: Google SpeechRecognize Language Code
+      SynthesizeSpeechLanguageHints:
+        default: Synthesize Speech Language Hints
 Parameters:
   AllowedLanguages:
     Default: zh-TW,zh-HK,en
-    Type: String
-  BotAlas:
+    Description: Google Translation API allowed values. If it detects something out
+      of the list, it will use the first one for reply translation. If it detects
+      the input language in the list, it translates the reply with the detected language.
+    Type: CommaDelimitedList
+  BotAlias:
     Default: $LATEST
+    Description: AWS Lex Bot Alias
     Type: String
   BotName:
     Default: InfoDay_InfoDayBot
+    Description: AWS Lex Bot Name
+    Type: String
+  DynamodbAutoscaling:
+    AllowedValues:
+    - true
+    - false
+    Default: true
+    Description: Enable DynamoDB AutoScaling
     Type: String
   FacebookPageToken:
     Description: Facebook Page Token
     NoEcho: true
     Type: String
   FacebookVerifyToken:
-    Default: testing
     Description: Facebook Verify Token
     Type: String
   GoogleApiKey:
+    Description: Google API Key that enabled Translation API and Speech API. (https://codelabs.developers.google.com/codelabs/cloud-speech-intro/index.html?index=..%2F..%2Findex#3)
     NoEcho: true
     Type: String
   SourceBucket:
     Default: howwhofeelinvideopackage
-    Description: Bucket Lambda deployment packages
+    Description: Bucket Lambda deployment packages (LexInterceptor_latest.zip and
+      QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar)
     Type: String
   SpeechRecognizeLanguage:
     Default: yue-Hant-HK
+    Description: Only one Language is supported for Voice to Text. ( https://cloud.google.com/speech/docs/languages
+      )
     Type: String
   SynthesizeSpeechLanguageHints:
     Default: '{"zh":"zh-HK"}'
+    Description: Json Object. For Polly unsupported language, synthesize speech hints
+      help mapping the region language. i.e. zh can map to zh-TW (Mandarin) or zh-HK
+      (Cantonese).
     Type: String
 Resources:
   AttachmentBucket:
@@ -54,6 +123,36 @@ Resources:
       Timeout: 60
       Tracing: Active
     Type: AWS::Serverless::Function
+  DynamoDBAutoscalingRole:
+    Condition: EnableDynamodbAutoscaling
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - application-autoscaling.amazonaws.com
+        Version: 2012-10-17
+      Policies:
+      - PolicyDocument:
+          Statement:
+          - Action:
+            - dynamodb:DescribeTable
+            - dynamodb:UpdateTable
+            Effect: Allow
+            Resource:
+            - Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*
+          - Action:
+            - cloudwatch:DescribeAlarms
+            - cloudwatch:PutMetricAlarm
+            - cloudwatch:DeleteAlarms
+            Effect: Allow
+            Resource: '*'
+          Version: 2012-10-17
+        PolicyName: lambdaIAMRolePolicy
+    Type: AWS::IAM::Role
   FacebookLexInterceptor:
     Properties:
       CodeUri:
@@ -64,11 +163,13 @@ Resources:
       Environment:
         Variables:
           ALLOWED_LANGUAGES:
-            Ref: AllowedLanguages
+            Fn::Join:
+            - ':'
+            - Ref: AllowedLanguages
           ATTACHMENT_BUCKET:
             Ref: AttachmentBucket
           BOT_ALIAS:
-            Ref: BotAlas
+            Ref: BotAlias
           BOT_NAME:
             Ref: BotName
           GOOGLE_API_KEY:
@@ -85,8 +186,6 @@ Resources:
             Ref: SpeechRecognizeLanguage
           SYNTHESIZE_SPEECH_LANGUAGE_HINTS:
             Ref: SynthesizeSpeechLanguageHints
-          TRANSLATION_CACHE_TABLE:
-            Ref: TranslationCacheTable
           VERIFY_TOKEN:
             Ref: FacebookVerifyToken
           VOICE_BUCKET:
@@ -135,11 +234,121 @@ Resources:
       Timeout: 60
       Tracing: Active
     Type: AWS::Serverless::Function
+  ImageDynamoDBTableReadScalingPolicy:
+    Condition: EnableDynamodbAutoscaling
+    Properties:
+      PolicyName: TableReadScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId:
+        Ref: ImageDynamoDBTableReadScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBReadCapacityUtilization
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        TargetValue: 75
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+  ImageDynamoDBTableReadScalingTarget:
+    Condition: EnableDynamodbAutoscaling
+    Properties:
+      MaxCapacity: 50
+      MinCapacity: 1
+      ResourceId:
+        Fn::Sub: table/${ImageTable}
+      RoleARN:
+        Fn::GetAtt:
+        - DynamoDBAutoscalingRole
+        - Arn
+      ScalableDimension: dynamodb:table:ReadCapacityUnits
+      ServiceNamespace: dynamodb
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+  ImageDynamoDBTableWriteScalingPolicy:
+    Condition: EnableDynamodbAutoscaling
+    Properties:
+      PolicyName: TableWriteScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId:
+        Ref: ImageDynamoDBTableWriteScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBWriteCapacityUtilization
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        TargetValue: 75
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+  ImageDynamoDBTableWriteScalingTarget:
+    Condition: EnableDynamodbAutoscaling
+    Properties:
+      MaxCapacity: 50
+      MinCapacity: 1
+      ResourceId:
+        Fn::Sub: table/${ImageTable}
+      RoleARN:
+        Fn::GetAtt:
+        - DynamoDBAutoscalingRole
+        - Arn
+      ScalableDimension: dynamodb:table:WriteCapacityUnits
+      ServiceNamespace: dynamodb
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
   ImageTable:
     Type: AWS::Serverless::SimpleTable
+  SessionDynamoDBTableReadScalingPolicy:
+    Condition: EnableDynamodbAutoscaling
+    Properties:
+      PolicyName: TableReadScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId:
+        Ref: SessionDynamoDBTableReadScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBReadCapacityUtilization
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        TargetValue: 75
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+  SessionDynamoDBTableReadScalingTarget:
+    Condition: EnableDynamodbAutoscaling
+    Properties:
+      MaxCapacity: 50
+      MinCapacity: 1
+      ResourceId:
+        Fn::Sub: table/${SessionTable}
+      RoleARN:
+        Fn::GetAtt:
+        - DynamoDBAutoscalingRole
+        - Arn
+      ScalableDimension: dynamodb:table:ReadCapacityUnits
+      ServiceNamespace: dynamodb
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+  SessionDynamoDBTableWriteScalingPolicy:
+    Condition: EnableDynamodbAutoscaling
+    Properties:
+      PolicyName: TableWriteScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId:
+        Ref: SessionDynamoDBTableWriteScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBWriteCapacityUtilization
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        TargetValue: 75
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+  SessionDynamoDBTableWriteScalingTarget:
+    Condition: EnableDynamodbAutoscaling
+    Properties:
+      MaxCapacity: 50
+      MinCapacity: 1
+      ResourceId:
+        Fn::Sub: table/${SessionTable}
+      RoleARN:
+        Fn::GetAtt:
+        - DynamoDBAutoscalingRole
+        - Arn
+      ScalableDimension: dynamodb:table:WriteCapacityUnits
+      ServiceNamespace: dynamodb
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
   SessionTable:
-    Type: AWS::Serverless::SimpleTable
-  TranslationCacheTable:
     Type: AWS::Serverless::SimpleTable
   VoiceBucket:
     DeletionPolicy: Retain
