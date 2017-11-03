@@ -4,7 +4,6 @@ Description: Lex Interceptor
 Parameters:
   SourceBucket:
     Type: String
-    Default: howwhofeelinvideopackage
     Description: Bucket Lambda deployment packages (LexInterceptor_latest.zip and QrcodeDecoderLambda-1.0-SNAPSHOT-all.jar)
   FacebookVerifyToken:
     Type: String
@@ -20,7 +19,6 @@ Parameters:
     Description: AWS Lex Bot Alias
   BotName:
     Type: String
-    Default: InfoDay_InfoDayBot
     Description: AWS Lex Bot Name
   GoogleApiKey:
     Type: String
@@ -29,15 +27,15 @@ Parameters:
   AllowedLanguages:
     Type: CommaDelimitedList
     Default: zh-TW,zh-HK,en
-    Description: Google Translation API allowed values. If it detects something out of the list, it will use the first one for reply translation. If it detects the input language in the list, it translates the reply with the detected language.
+    Description: Google Translation API allowed Language Code values. If it detects something out of the list, it will use the first one for the reply translation. If it is in the list, it translates the reply with the detected language code.
   SpeechRecognizeLanguage:
     Type: String
     Default: yue-Hant-HK
-    Description:  Only one Language is supported for Voice to Text. ( https://cloud.google.com/speech/docs/languages )
+    Description:  One Google Speech API Language Code for Voice to Text. ( https://cloud.google.com/speech/docs/languages )
   SynthesizeSpeechLanguageHints:
     Type: String
     Default: '{"zh":"zh-HK"}'
-    Description: Json Object. For Polly unsupported language, synthesize speech hints help mapping the region language. i.e. zh can map to zh-TW (Mandarin) or zh-HK (Cantonese).
+    Description: Json Object. For Polly unsupported language, synthesize speech hints help mapping the region language. For example, zh can map to zh-TW (Mandarin) or zh-HK (Cantonese). Set {"zh":"zh-HK"}, the system will use zh-HK for any zh related language.
   DynamodbAutoscaling:
     Type: String
     Default: true
@@ -319,7 +317,7 @@ Metadata:
           - BotName
           - BotAlias
           - DynamodbAutoscaling
-          - DecodeQrcoede
+          - DecodeQrcode
       -
         Label:
           default: Google
@@ -346,18 +344,18 @@ Metadata:
       BotAlias:
         default: Lex Bot Alias
       DynamodbAutoscaling:
-        default: Dynamodb Autoscaling
+        default: DynamoDB Autoscaling
       GoogleApiKey:
         default: Google Api Key
       AllowedLanguages:
         default: Google Translation Allowed Languages Code List
       SpeechRecognizeLanguage:
-        default: Google SpeechRecognize Language Code
+        default: Google Speech Recognize Language Code
       SynthesizeSpeechLanguageHints:
         default: Synthesize Speech Language Hints
       FacebookPageToken:
         default: Facebook Page Token
       FacebookVerifyToken:
         default: Facebook Verify Token
-      DecodeQrcoede:
-        default: Decode Qrcoede
+      DecodeQrcode:
+        default: Decode QR code
