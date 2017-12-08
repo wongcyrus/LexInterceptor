@@ -195,8 +195,8 @@ Resources:
           ALLOWED_LANGUAGES: !Join [ ":", !Ref AllowedLanguages ]
           SPEECH_RECOGNIZE_LANGUAGE: !Ref SpeechRecognizeLanguage
           SYNTHESIZE_SPEECH_LANGUAGE_HINTS: !Ref SynthesizeSpeechLanguageHints
-          MS_BOT_FRAMEWORK_APP_ID: MsBotFrameworkAppID
-          MS_BOT_FRAMEWORK_APP_PASSWORD: MsBotFrameworkAppPassword
+          MS_BOT_FRAMEWORK_APP_ID: !Ref MsBotFrameworkAppID
+          MS_BOT_FRAMEWORK_APP_PASSWORD: !Ref MsBotFrameworkAppPassword
       Events:
         PostMessage:
           Type: Api

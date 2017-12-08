@@ -10,7 +10,7 @@ const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const SESSION_TABLE_NAME = process.env.SESSION_TABLE_NAME;
 const ALLOWED_LANGUAGES = process.env.ALLOWED_LANGUAGES;
 
-const MS_BOT_FRAMEWORK_APP_ID = process.env.MsBotFrameworkAppID;
+const MS_BOT_FRAMEWORK_APP_ID = process.env.MS_BOT_FRAMEWORK_APP_ID;
 const MS_BOT_FRAMEWORK_APP_PASSWORD = process.env.MS_BOT_FRAMEWORK_APP_PASSWORD;
 
 const googleTranslator = new GoogleTranslator(GOOGLE_API_KEY, ALLOWED_LANGUAGES);
@@ -122,7 +122,7 @@ const sendReplyMessage = (headers, body, token, message) => new Promise((resolve
         replyToId: body.id
     };
     request
-        .post(body.serviceUrl + `v3/conversations/${body.conversation.id}/activities/${body.id}`)
+        .post(body.serviceUrl + `/v3/conversations/${body.conversation.id}/activities/${body.id}`)
         .type('application/json')
         .set('Authorization', "Bearer " + token)
         .parse(request.parse.text)
