@@ -50,6 +50,14 @@ Parameters:
       - true
       - false
     Description: Enable Decode Qrcoede from image attachment.
+  MsBotFrameworkAppID:
+    Type: String
+    NoEcho: true
+    Description: Bot Framework App ID
+  MsBotFrameworkAppPassword:
+    Type: String
+    NoEcho: true
+    Description: Bot Framework App ID Password
 Conditions:
   EnableDynamodbAutoscaling: !Equals [ !Ref DynamodbAutoscaling, true ]
   EnableDecodeQrcode: !Equals [ !Ref DecodeQrcode, true ]
@@ -134,6 +142,71 @@ Resources:
           Type: Api
           Properties:
             Path: /
+            Method: get
+
+  MsBotFxInterceptorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: msbotFxInterceptor.handler
+      Runtime: nodejs6.10
+      CodeUri:
+        Bucket: !Ref SourceBucket
+        Key: LexInterceptor_latest.zip
+      Description: Interceptor Facebook Request
+      MemorySize: 512
+      Timeout: 60
+      Tracing: Active
+      Policies:
+        - AWSLambdaExecute # Managed Policy
+        - AWSXrayWriteOnlyAccess
+        - AmazonRekognitionFullAccess
+        - AmazonDynamoDBFullAccess
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+              - lambda:InvokeFunction
+              - lex:PostText
+              - polly:DescribeVoices
+              - polly:SynthesizeSpeech
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - dynamodb:Scan
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+              Resource:
+              - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SessionTable}
+      Environment:
+        Variables:
+          QRCODE_FUNCTION: !If [EnableDecodeQrcode, !Ref DecodeQrcodeFunction, !Ref "AWS::NoValue"]
+          PAGE_TOKEN: !Ref FacebookPageToken
+          VERIFY_TOKEN: !Ref FacebookVerifyToken
+          BOT_ALIAS: !Ref BotAlias
+          BOT_NAME: !Ref BotName
+          GOOGLE_API_KEY: !Ref GoogleApiKey
+          ATTACHMENT_BUCKET: !Ref AttachmentBucket
+          VOICE_BUCKET: !Ref VoiceBucket
+          VOICE_SITE_URL:  !GetAtt VoiceBucket.WebsiteURL
+          SESSION_TABLE_NAME : !Ref SessionTable
+          IMAGE_TABLE: !Ref ImageTable
+          ALLOWED_LANGUAGES: !Join [ ":", !Ref AllowedLanguages ]
+          SPEECH_RECOGNIZE_LANGUAGE: !Ref SpeechRecognizeLanguage
+          SYNTHESIZE_SPEECH_LANGUAGE_HINTS: !Ref SynthesizeSpeechLanguageHints
+          MS_BOT_FRAMEWORK_APP_ID: MsBotFrameworkAppID
+          MS_BOT_FRAMEWORK_APP_PASSWORD: MsBotFrameworkAppPassword
+      Events:
+        PostMessage:
+          Type: Api
+          Properties:
+            Path: /msbotfx
+            Method: post
+        GetMessage:
+          Type: Api
+          Properties:
+            Path: /msbotfx
             Method: get
 
   AttachmentBucket:
@@ -336,6 +409,12 @@ Metadata:
         Parameters:
           - FacebookPageToken
           - FacebookVerifyToken
+      -
+        Label:
+          default: Microsoft Bot Framework
+        Parameters:
+          - MsBotFrameworkAppID
+          - MsBotFrameworkAppPassword
     ParameterLabels:
       SourceBucket:
         default: Source Bucket
@@ -359,3 +438,7 @@ Metadata:
         default: Facebook Verify Token
       DecodeQrcode:
         default: Decode QR code
+      MsBotFrameworkAppID:
+        default: Bot App ID
+      MsBotFrameworkAppPassword:
+        default: Bot App Password
