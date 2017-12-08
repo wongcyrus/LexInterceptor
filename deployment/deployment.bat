@@ -16,6 +16,8 @@ aws cloudformation deploy ^
     GoogleApiKey=%GoogleApiKey% ^
     FacebookPageToken=%FacebookPageToken% ^
     FacebookVerifyToken=%FacebookVerifyToken% ^
+    MsBotFrameworkAppID=%MsBotFrameworkAppID% ^
+    MsBotFrameworkAppPassword=%MsBotFrameworkAppPassword% ^
     BotName=%BotName% ^
     SourceBucket=%SourceBucket%
 

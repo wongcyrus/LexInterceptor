@@ -1,6 +1,7 @@
 SET FacebookPageToken=
 SET FacebookVerifyToken=
 SET GoogleApiKey=
-SET FacebookVerifyToken=
+SET MsBotFrameworkAppID=
+SET MsBotFrameworkAppPassword=
 SET BotName=
 SET SourceBucket=
