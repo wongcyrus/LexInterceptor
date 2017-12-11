@@ -12,6 +12,7 @@
     "lambduh-execute": "^1.3.0",
     "mime-types": "^2.1.17",
     "randomstring": "^1.1.5",
+    "sha1": "^1.1.1",
     "superagent": "^3.8.0",
     "urlencode": "^1.1.0"
   },

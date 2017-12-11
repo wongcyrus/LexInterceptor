@@ -12,7 +12,7 @@ grunt.initConfig({
     },
     lambda_deploy: {
         awsLexInterceptor: {
-            arn: 'arn:aws:lambda:us-east-1:894598711988:function:LexInterceptor-MsBotFxInterceptorFunction-RXD1JXBA8WRV',
+            arn: 'arn:aws:lambda:us-east-1:894598711988:function:LexInterceptor-MsBotFxInterceptorFunction-UNEXH85X2GLX',
             options: {
                 region: 'us-east-1',
                 handler: 'msbotFxInterceptor.handler'
