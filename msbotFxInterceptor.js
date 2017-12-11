@@ -30,6 +30,10 @@ const lexController = new LexController(BOT_NAME, BOT_ALIAS);
 const sessionTracker = new SessionTracker(SESSION_TABLE_NAME);
 const msBotMessenger = new MsBotMessenger(MS_BOT_FRAMEWORK_APP_ID, MS_BOT_FRAMEWORK_APP_PASSWORD);
 
+const sha1 = require('sha1');
+const fs = require('fs');
+const mime = require('mime-types');
+
 exports.handler = (event, context, callback) => {
     console.log(JSON.stringify(event));
 
@@ -64,11 +68,15 @@ exports.handler = (event, context, callback) => {
         };
         let imageLinks = body.attachments
             .filter(c => c.contentType.startsWith("image/"))
-            .map(c => c.contentUrl);
+            .map(c => {
+                return {contentUrl: c.contentUrl, contentType: c.contentType}
+            });
 
         let audioLinks = body.attachments
-            .filter(c => c.contentType.startsWith("video/mp4") || c.contentType.startsWith("audio/aac"))
-            .map(c => c.contentUrl);
+            .filter(c => c.contentType.startsWith("video/mp4") || c.contentType.startsWith("audio/aac") || c.contentType.startsWith("audio/ogg"))
+            .map(c => {
+                return {contentUrl: c.contentUrl, contentType: c.contentType}
+            });
 
         if (audioLinks.length === 1) {
             console.log("Audio links: " + audioLinks);
@@ -153,11 +161,14 @@ const saveImageDataToSessionTable = (messagingEvent) => {
 };
 
 const processImage = imageLink => {
-    console.log("processImage:" + imageLink);
+    console.log("processImage:" + imageLink.contentUrl);
     let imageProcessor = new ImageProcessor(QRCODE_FUNCTION, ATTACHMENT_BUCKET);
     let storageController = new StorageController(ATTACHMENT_BUCKET);
-    return storageController.downloadToTmp(imageLink)
-        .then(c => storageController.uploadToS3(c))
+
+    const key = sha1(imageLink.contentUrl) + "." + mime.extension(imageLink.contentType);
+
+    return storageController.downloadToTmp(imageLink.contentUrl, key)
+        .then(c => storageController.uploadToS3(c, imageLink.contentType))
         .then(c => imageProcessor.qrCodeDecode(c))
         .then(c => imageProcessor.detectLabels(c));
 };
@@ -168,8 +179,13 @@ const processAudio = audioLink => {
     let storageController = new StorageController(ATTACHMENT_BUCKET);
     let speechRecognizer = new SpeechRecognizer(GOOGLE_API_KEY, SPEECH_RECOGNIZE_LANGUAGE);
 
-    return storageController.downloadToTmp(audioLink)
-        .then(c => storageController.uploadToS3(c))
+    let ext = mime.extension(audioLink.contentType);
+    if (!ext)
+        ext = audioLink.contentType.split("/")[1];
+    const key = sha1(audioLink.contentUrl) + "." + ext;
+
+    return storageController.downloadToTmp(audioLink.contentUrl, key)
+        .then(c => storageController.uploadToS3(c, audioLink.contentType))
         .then(c => audioConverter.convertToLinear16(c))
         .then(c => storageController.uploadToS3(c))
         .then(c => speechRecognizer.getText(c));
