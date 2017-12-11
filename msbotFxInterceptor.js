@@ -28,6 +28,7 @@ const MS_BOT_FRAMEWORK_APP_PASSWORD = process.env.MS_BOT_FRAMEWORK_APP_PASSWORD;
 const googleTranslator = new GoogleTranslator(GOOGLE_API_KEY, ALLOWED_LANGUAGES);
 const lexController = new LexController(BOT_NAME, BOT_ALIAS);
 const sessionTracker = new SessionTracker(SESSION_TABLE_NAME);
+const msBotMessenger = new MsBotMessenger(MS_BOT_FRAMEWORK_APP_ID, MS_BOT_FRAMEWORK_APP_PASSWORD);
 
 exports.handler = (event, context, callback) => {
     console.log(JSON.stringify(event));
@@ -45,7 +46,6 @@ exports.handler = (event, context, callback) => {
         }
     };
 
-    let msBotMessenger = new MsBotMessenger(MS_BOT_FRAMEWORK_APP_ID, MS_BOT_FRAMEWORK_APP_PASSWORD);
     let process;
 
     if (body.text) {
@@ -54,13 +54,14 @@ exports.handler = (event, context, callback) => {
             text: receivedMessage
         };
 
-        process = msBotMessenger.getToken()
-            .then(a => googleTranslator.detectLanguage(messagingEvent))
+        process = googleTranslator.detectLanguage(messagingEvent)
             .then(c => sessionTracker.restoreLastSession(c))
             .then(c => googleTranslator.translateRequest(c));
 
     } else if (body.attachments) {
-
+        messagingEvent.message = {
+            text: ""
+        };
         let imageLinks = body.attachments
             .filter(c => c.contentType.startsWith("image/"))
             .map(c => c.contentUrl);
@@ -69,13 +70,9 @@ exports.handler = (event, context, callback) => {
             .filter(c => c.contentType.startsWith("video/mp4") || c.contentType.startsWith("audio/aac"))
             .map(c => c.contentUrl);
 
-        // console.log(imageLinks);
-        console.log(audioLinks);
-
         if (audioLinks.length === 1) {
             console.log("Audio links: " + audioLinks);
-            process = msBotMessenger.getToken()
-                .then(a => processAudio(audioLinks[0]))
+            process = processAudio(audioLinks[0])
                 .then(voice => new Promise((resolve, reject) => {
                         messagingEvent.message = voice.message;
                         if (messagingEvent.message.text !== "") {
@@ -90,8 +87,25 @@ exports.handler = (event, context, callback) => {
                 .then(c => googleTranslator.detectLanguage(c))
                 .then(c => sessionTracker.restoreLastSession(c))
                 .then(c => googleTranslator.translateRequest(c));
+        } else if (imageLinks.length > 0) {
+            console.log("Image links: " + imageLinks);
+            process = Promise.all(imageLinks.map(processImage))
+                .then(imageData => new Promise((resolve, reject) => {
+                        messagingEvent.imageData = imageData;
+                        let sessionAttributes = messagingEvent.sessionAttributes || {};
+                        if (sessionAttributes.currentSlot) {
+                            console.log("Save currentSlot translated text for Images");
+                            sessionAttributes["original_" + sessionAttributes.currentSlot] = "" + imageLinks;
+                            sessionAttributes["translated_" + sessionAttributes.currentSlot] = "" + imageLinks;
+                        }
+                        resolve(messagingEvent);
+                    }
+                )).then(c => sessionTracker.restoreLastSession(c))
+                .then(saveImageDataToSessionTable);
+        } else {
+            console.log("Unsupported file type!");
+            callback(null, createResponse(200, "Unsupported file type!"));
         }
-
     } else {
         console.log("Unknown message data!");
         callback(null, createResponse(200, "Unknown message data!"));
@@ -118,8 +132,34 @@ exports.handler = (event, context, callback) => {
             console.log("Call back with Error");
             callback(null, createResponse(200, reason));
         });
-
     }
+};
+
+const saveImageDataToSessionTable = (messagingEvent) => {
+    return new Promise((resolve, reject) => {
+        //Save into Session and send send "OK" to Lex.
+        let sessionAttributes = messagingEvent.sessionAttributes ? messagingEvent.sessionAttributes : {};
+        //Lex sessionAttributes does not support tree like json!
+        sessionAttributes.imageData = "true";
+        messagingEvent.sessionAttributes = sessionAttributes;
+
+        let imageTable = new SimpleTableController(IMAGE_TABLE);
+        imageTable.put({id: messagingEvent.sender.id, data: messagingEvent.imageData})
+            .then(data => {
+                messagingEvent.message = {text: "OK", language: googleTranslator.getDefaultLanguages()};
+                resolve(messagingEvent);
+            }).catch(reject);
+    });
+};
+
+const processImage = imageLink => {
+    console.log("processImage:" + imageLink);
+    let imageProcessor = new ImageProcessor(QRCODE_FUNCTION, ATTACHMENT_BUCKET);
+    let storageController = new StorageController(ATTACHMENT_BUCKET);
+    return storageController.downloadToTmp(imageLink)
+        .then(c => storageController.uploadToS3(c))
+        .then(c => imageProcessor.qrCodeDecode(c))
+        .then(c => imageProcessor.detectLabels(c));
 };
 
 const processAudio = audioLink => {
@@ -134,7 +174,6 @@ const processAudio = audioLink => {
         .then(c => storageController.uploadToS3(c))
         .then(c => speechRecognizer.getText(c));
 };
-
 
 const createResponse = (statusCode, body) => {
     return {
