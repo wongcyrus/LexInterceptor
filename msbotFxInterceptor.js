@@ -31,7 +31,6 @@ const sessionTracker = new SessionTracker(SESSION_TABLE_NAME);
 const msBotMessenger = new MsBotMessenger(MS_BOT_FRAMEWORK_APP_ID, MS_BOT_FRAMEWORK_APP_PASSWORD);
 
 const sha1 = require('sha1');
-const fs = require('fs');
 const mime = require('mime-types');
 
 exports.handler = (event, context, callback) => {
