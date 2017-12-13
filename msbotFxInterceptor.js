@@ -129,8 +129,11 @@ exports.handler = (event, context, callback) => {
             .then(messagingEvent => {
                 console.log("sendTextMessage", messagingEvent);
                 let voiceUrl = VOICE_SITE_URL + "/" + messagingEvent.Key;
-                return msBotMessenger.sendVoiceMessage(headers, body, voiceUrl)
-                    .then(msBotMessenger.sendTextMessage(headers, body, messagingEvent.message.reply));
+                if (body.channelId !== "skype")
+                    return msBotMessenger.sendVoiceMessage(headers, body, voiceUrl)
+                        .then(msBotMessenger.sendTextMessage(headers, body, messagingEvent.message.reply));
+                else
+                    return msBotMessenger.sendTextMessage(headers, body, messagingEvent.message.reply);
             }).then(result => {
             console.log(result);
             callback(null, createResponse(200, "ok"));
