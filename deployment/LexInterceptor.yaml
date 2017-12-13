@@ -379,6 +379,26 @@ Resources:
         ScaleOutCooldown: 60
         TargetValue: 75
 
+Outputs:
+  FacebookWebhookUrl:
+    Description: URL for Facebook Bot
+    Value: !Join
+      - ''
+      - - https://
+        - !Ref ServerlessRestApi
+        - '.execute-api.'
+        - !Ref 'AWS::Region'
+        - '.amazonaws.com/Prod/'
+  MicrosoftBotFxWebhookUrl:
+    Description: URL for Microsoft Bot Framework
+    Value: !Join
+      - ''
+      - - https://
+        - !Ref ServerlessRestApi
+        - '.execute-api.'
+        - !Ref 'AWS::Region'
+        - '.amazonaws.com/Prod/msbotfx'
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -439,6 +459,6 @@ Metadata:
       DecodeQrcode:
         default: Decode QR code
       MsBotFrameworkAppID:
-        default: Bot App ID
+        default: Bot Framework App ID
       MsBotFrameworkAppPassword:
-        default: Bot App Password
+        default: Bot Framework App Password
