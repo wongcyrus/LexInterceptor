@@ -119,3 +119,7 @@ out
 gen
 /playground/
 /deployment/SetSecret.bat
+
+# Build artifacts
+dist/
+*.zip
